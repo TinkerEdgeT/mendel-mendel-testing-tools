@@ -1,16 +1,16 @@
 /*
  * Copyright (C) 1999-2001  Brian Paul   All Rights Reserved.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
  * the rights to use, copy, modify, merge, publish, distribute, sublicense,
  * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included
  * in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
  * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
@@ -23,7 +23,7 @@
  * Ported to GLES2.
  * Kristian Høgsberg <krh@bitplanet.net>
  * May 3, 2010
- * 
+ *
  * Improve GLES2 port:
  *   * Refactor gear drawing.
  *   * Use correct normals for surfaces.
@@ -35,21 +35,23 @@
  * Jul 13, 2010
  */
 
-#define GL_GLEXT_PROTOTYPES
-#define EGL_EGLEXT_PROTOTYPES
+/* 
+ * Port to Mendel Linux Wayland by Peter Nordström 1 June 2020 
+ * 
+ * Window handling and egl initialization done externally in
+ * simple-egl.c
+ */
+
 
 #define _GNU_SOURCE
 
+#include <GLES2/gl2.h>
 #include <math.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <sys/time.h>
 #include <unistd.h>
-#include <GLES2/gl2.h>
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
-#include "eglut.h"
+
+extern void HandleFrame(void);
 
 #define STRIPS_PER_TOOTH 7
 #define VERTICES_PER_TOOTH 34
@@ -100,15 +102,15 @@ static GLfloat ProjectionMatrix[16];
 /** The direction of the directional light for the scene */
 static const GLfloat LightSourcePosition[4] = { 5.0, 5.0, 10.0, 1.0};
 
-/** 
+/**
  * Fills a gear vertex.
- * 
+ *
  * @param v the vertex to fill
  * @param x the x coordinate
  * @param y the y coordinate
  * @param z the z coortinate
- * @param n pointer to the normal table 
- * 
+ * @param n pointer to the normal table
+ *
  * @return the operation error code
  */
 static GearVertex *
@@ -126,13 +128,13 @@ vert(GearVertex *v, GLfloat x, GLfloat y, GLfloat z, GLfloat n[3])
 
 /**
  *  Create a gear wheel.
- * 
+ *
  *  @param inner_radius radius of hole at center
  *  @param outer_radius radius at center of teeth
  *  @param width width of gear
  *  @param teeth number of teeth
  *  @param tooth_depth depth of tooth
- *  
+ *
  *  @return pointer to the constructed struct gear
  */
 static struct gear *
@@ -276,11 +278,11 @@ create_gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
    return gear;
 }
 
-/** 
+/**
  * Multiplies two 4x4 matrices.
- * 
+ *
  * The result is stored in matrix m.
- * 
+ *
  * @param m the first matrix to multiply
  * @param n the second matrix to multiply
  */
@@ -303,9 +305,9 @@ multiply(GLfloat *m, const GLfloat *n)
    memcpy(m, &tmp, sizeof tmp);
 }
 
-/** 
+/**
  * Rotates a 4x4 matrix.
- * 
+ *
  * @param[in,out] m the matrix to rotate
  * @param angle the angle to rotate
  * @param x the x component of the direction to rotate to
@@ -320,7 +322,7 @@ rotate(GLfloat *m, GLfloat angle, GLfloat x, GLfloat y, GLfloat z)
    sincos(angle, &s, &c);
    GLfloat r[16] = {
       x * x * (1 - c) + c,     y * x * (1 - c) + z * s, x * z * (1 - c) - y * s, 0,
-      x * y * (1 - c) - z * s, y * y * (1 - c) + c,     y * z * (1 - c) + x * s, 0, 
+      x * y * (1 - c) - z * s, y * y * (1 - c) + c,     y * z * (1 - c) + x * s, 0,
       x * z * (1 - c) + y * s, y * z * (1 - c) - x * s, z * z * (1 - c) + c,     0,
       0, 0, 0, 1
    };
@@ -329,9 +331,9 @@ rotate(GLfloat *m, GLfloat angle, GLfloat x, GLfloat y, GLfloat z)
 }
 
 
-/** 
+/**
  * Translates a 4x4 matrix.
- * 
+ *
  * @param[in,out] m the matrix to translate
  * @param x the x component of the direction to translate to
  * @param y the y component of the direction to translate to
@@ -345,9 +347,9 @@ translate(GLfloat *m, GLfloat x, GLfloat y, GLfloat z)
    multiply(m, t);
 }
 
-/** 
+/**
  * Creates an identity 4x4 matrix.
- * 
+ *
  * @param m the matrix make an identity matrix
  */
 static void
@@ -363,12 +365,12 @@ identity(GLfloat *m)
    memcpy(m, t, sizeof(t));
 }
 
-/** 
+/**
  * Transposes a 4x4 matrix.
  *
  * @param m the matrix to transpose
  */
-static void 
+static void
 transpose(GLfloat *m)
 {
    GLfloat t[16] = {
@@ -407,9 +409,9 @@ invert(GLfloat *m)
    multiply(m, t);
 }
 
-/** 
+/**
  * Calculate a perspective projection transformation.
- * 
+ *
  * @param m the matrix to save the transformation in
  * @param fovy the field of view in the y direction
  * @param aspect the view aspect ratio
@@ -472,7 +474,7 @@ draw_gear(struct gear *gear, GLfloat *transform,
    glUniformMatrix4fv(ModelViewProjectionMatrix_location, 1, GL_FALSE,
                       model_view_projection);
 
-   /* 
+   /*
     * Create and set the NormalMatrix. It's the inverse transpose of the
     * ModelView matrix.
     */
@@ -507,7 +509,7 @@ draw_gear(struct gear *gear, GLfloat *transform,
    glDisableVertexAttribArray(0);
 }
 
-/** 
+/**
  * Draws the gears.
  */
 static void
@@ -534,9 +536,9 @@ gears_draw(void)
    draw_gear(gear3, transform, -3.1, 4.2, -2 * angle - 25.0, blue);
 }
 
-/** 
+/**
  * Handles a new window size or exposure.
- * 
+ *
  * @param width the window width
  * @param height the window height
  */
@@ -548,62 +550,6 @@ gears_reshape(int width, int height)
 
    /* Set the viewport */
    glViewport(0, 0, (GLint) width, (GLint) height);
-}
-
-/** 
- * Handles special eglut events.
- * 
- * @param special the event to handle.
- */
-static void
-gears_special(int special)
-{
-   switch (special) {
-      case EGLUT_KEY_LEFT:
-         view_rot[1] += 5.0;
-         break;
-      case EGLUT_KEY_RIGHT:
-         view_rot[1] -= 5.0;
-         break;
-      case EGLUT_KEY_UP:
-         view_rot[0] += 5.0;
-         break;
-      case EGLUT_KEY_DOWN:
-         view_rot[0] -= 5.0;
-         break;
-   }
-}
-
-static void
-gears_idle(void)
-{
-   static int frames = 0;
-   static double tRot0 = -1.0, tRate0 = -1.0;
-   double dt, t = eglutGet(EGLUT_ELAPSED_TIME) / 1000.0;
-
-   if (tRot0 < 0.0)
-      tRot0 = t;
-   dt = t - tRot0;
-   tRot0 = t;
-
-   /* advance rotation for next frame */
-   angle += 70.0 * dt;  /* 70 degrees per second */
-   if (angle > 3600.0)
-      angle -= 3600.0;
-
-   eglutPostRedisplay();
-   frames++;
-
-   if (tRate0 < 0.0)
-      tRate0 = t;
-   if (t - tRate0 >= 5.0) {
-      GLfloat seconds = t - tRate0;
-      GLfloat fps = frames / seconds;
-      printf("%d frames in %3.1f seconds = %6.3f FPS\n", frames, seconds,
-            fps);
-      tRate0 = t;
-      frames = 0;
-   }
 }
 
 static const char vertex_shader[] =
@@ -659,7 +605,6 @@ gears_init(void)
    glShaderSource(v, 1, &p, NULL);
    glCompileShader(v);
    glGetShaderInfoLog(v, sizeof msg, NULL, msg);
-   printf("vertex shader info: %s\n", msg);
 
    /* Compile the fragment shader */
    p = fragment_shader;
@@ -667,7 +612,6 @@ gears_init(void)
    glShaderSource(f, 1, &p, NULL);
    glCompileShader(f);
    glGetShaderInfoLog(f, sizeof msg, NULL, msg);
-   printf("fragment shader info: %s\n", msg);
 
    /* Create and link the shader program */
    program = glCreateProgram();
@@ -678,7 +622,6 @@ gears_init(void)
 
    glLinkProgram(program);
    glGetProgramInfoLog(program, sizeof msg, NULL, msg);
-   printf("info: %s\n", msg);
 
    /* Enable the shaders */
    glUseProgram(program);
@@ -698,26 +641,18 @@ gears_init(void)
    gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
 }
 
-int
-main(int argc, char *argv[])
-{
-   /* Initialize the window */
-   eglutInitWindowSize(300, 300);
-   eglutInitAPIMask(EGLUT_OPENGL_ES2_BIT);
-   eglutInit(argc, argv);
+void RunGears() {
+  gears_init();
+  gears_reshape(600, 600);
+  while (1) {
+    double dt = 0.01666;
 
-   eglutCreateWindow("es2gears");
+    /* advance rotation for next frame */
+    angle += 70.0 * dt;  /* 70 degrees per second */
+    if (angle > 3600.0)
+      angle -= 3600.0;
 
-   /* Set up eglut callback functions */
-   eglutIdleFunc(gears_idle);
-   eglutReshapeFunc(gears_reshape);
-   eglutDisplayFunc(gears_draw);
-   eglutSpecialFunc(gears_special);
-
-   /* Initialize the gears */
-   gears_init();
-
-   eglutMainLoop();
-
-   return 0;
+    gears_draw();
+    HandleFrame();
+  }
 }

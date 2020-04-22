@@ -1,0 +1,7 @@
+To build glesgears and es2gears
+
+1. Copy the whole directory to the target
+2. On the target run:
+   % sudo apt-get install libgles2-mesa-dev mesa-common-dev libwayland-dev
+3. In the opengl directory:
+   % make

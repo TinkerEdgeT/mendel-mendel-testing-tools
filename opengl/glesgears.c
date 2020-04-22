@@ -1,69 +1,45 @@
 /*
- * 3-D gear wheels.  This program is in the public domain.
- *
- * Command line options:
- *    -info      print GL implementation information
- *    -exit      automatically exit after 30 seconds
- *
- *
- * Brian Paul
+ * Copyright (C) 1999-2001  Brian Paul   All Rights Reserved.
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * BRIAN PAUL BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
 /* Conversion to use vertex buffer objects by Michael J. Clark */
 
+/* 
+ * Port to Mendel Linux Wayland by Peter Nordström 1 June 2020 
+ * 
+ * Window handling and egl initialization done externally in
+ * simple-egl.c
+ */
+
 #include <assert.h>
+#include <GLES/gl.h>
 #include <math.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include "window.h"
+#include <unistd.h>
 
-#define MAX_CONFIGS 10
-#define MAX_MODES 100
-
-
-#ifdef _WIN32
-  #define WIN32_LEAN_AND_MEAN 1
-  #include <windows.h>
-
-  static double
-  current_time(void)
-  {
-     DWORD tv;
-
-     tv = GetTickCount();
-     return (tv/1000.0);
-  }
-  
-#else
-  #include <sys/time.h>
-  #include <unistd.h>
-
-  /* return current time (in seconds) */
-  static double
-  current_time(void)
-  {
-     struct timeval tv;
-  #ifdef __VMS
-     (void) gettimeofday(&tv, NULL );
-  #else
-     struct timezone tz;
-     (void) gettimeofday(&tv, &tz);
-  #endif
-     return (double) tv.tv_sec + tv.tv_usec / 1000000.0;
-  }
-#endif
-
-#include <GLES/gl.h>
-#include <GLES/egl.h>
-
+extern void HandleFrame(void);
 
 #ifndef M_PI
 #define M_PI 3.14159265
 #endif
 
-
-static GLint autoexit = 0;
 static GLfloat viewDist = 40.0;
 
 typedef struct {
@@ -73,7 +49,7 @@ typedef struct {
 
 typedef struct {
   vertex_t *vertices;
-  GLshort *indices;
+  GLushort *indices;
   GLfloat color[4];
   int nvertices, nindices;
   GLuint ibo;
@@ -87,7 +63,7 @@ static gear_t *blue_gear;
 
   Draw a gear wheel.  You'll probably want to call this function when
   building a display list since we do a lot of trig here.
- 
+
   Input:  inner_radius - radius of hole at center
           outer_radius - radius at center of teeth
           width - width of gear
@@ -106,16 +82,17 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
   GLfloat u1, v1, u2, v2, len;
   GLfloat cos_ta, cos_ta_1da, cos_ta_2da, cos_ta_3da, cos_ta_4da;
   GLfloat sin_ta, sin_ta_1da, sin_ta_2da, sin_ta_3da, sin_ta_4da;
-  GLshort ix0, ix1, ix2, ix3, ix4, ix5;
+  GLushort ix0, ix1, ix2, ix3, ix4, ix5;
   vertex_t *vt, *nm;
-  GLshort *ix;
+  GLushort *ix;
 
   gear_t *gear = calloc(1, sizeof(gear_t));
   gear->nvertices = teeth * 40;
   gear->nindices = teeth * 66 * 3;
   gear->vertices = calloc(gear->nvertices, sizeof(vertex_t));
-  gear->indices = calloc(gear->nindices, sizeof(GLshort));
+  gear->indices = calloc(gear->nindices, sizeof(GLushort));
   memcpy(&gear->color[0], &color[0], sizeof(GLfloat) * 4);
+
 
   r0 = inner_radius;
   r1 = outer_radius - tooth_depth / 2.0;
@@ -133,7 +110,7 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
 #define INDEX(a,b,c) ((*ix++ = a),(*ix++ = b),(*ix++ = c))
 
   for (i = 0; i < teeth; i++) {
-    ta = i * 2.0 * M_PI / teeth;
+    ta = i * 2.0 * M_PI / (teeth);
 
     cos_ta = cos(ta);
     cos_ta_1da = cos(ta + da);
@@ -145,7 +122,7 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
     sin_ta_2da = sin(ta + 2 * da);
     sin_ta_3da = sin(ta + 3 * da);
     sin_ta_4da = sin(ta + 4 * da);
-               
+
     u1 = r2 * cos_ta_1da - r1 * cos_ta;
     v1 = r2 * sin_ta_1da - r1 * sin_ta;
     len = sqrt(u1 * u1 + v1 * v1);
@@ -157,8 +134,8 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
     /* front face */
     ix0 = VERTEX(r0 * cos_ta,          r0 * sin_ta,          width * 0.5);
     ix1 = VERTEX(r1 * cos_ta,          r1 * sin_ta,          width * 0.5);
-    ix2 = VERTEX(r0 * cos_ta,          r0 * sin_ta,          width * 0.5);
-    ix3 = VERTEX(r1 * cos_ta_3da,      r1 * sin_ta_3da,      width * 0.5);
+    ix2 = VERTEX(r0 * cos_ta_2da,      r0 * sin_ta_2da,      width * 0.5);
+    ix3 = VERTEX(r1 * cos_ta_2da,      r1 * sin_ta_2da,      width * 0.5);
     ix4 = VERTEX(r0 * cos_ta_4da,      r0 * sin_ta_4da,      width * 0.5);
     ix5 = VERTEX(r1 * cos_ta_4da,      r1 * sin_ta_4da,      width * 0.5);
     for (j = 0; j < 6; j++) {
@@ -168,7 +145,7 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
     INDEX(ix1, ix3, ix2);
     INDEX(ix2, ix3, ix4);
     INDEX(ix3, ix5, ix4);
-               
+
     /* front sides of teeth */
     ix0 = VERTEX(r1 * cos_ta,          r1 * sin_ta,          width * 0.5);
     ix1 = VERTEX(r2 * cos_ta_1da,      r2 * sin_ta_1da,      width * 0.5);
@@ -181,12 +158,12 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
     INDEX(ix1, ix3, ix2);
 
     /* back face */
-    ix0 = VERTEX(r1 * cos_ta,          r1 * sin_ta,          -width * 0.5);
-    ix1 = VERTEX(r0 * cos_ta,          r0 * sin_ta,          -width * 0.5);
-    ix2 = VERTEX(r1 * cos_ta_3da,      r1 * sin_ta_3da,      -width * 0.5);
-    ix3 = VERTEX(r0 * cos_ta,          r0 * sin_ta,          -width * 0.5);
-    ix4 = VERTEX(r1 * cos_ta_4da,      r1 * sin_ta_4da,      -width * 0.5);
-    ix5 = VERTEX(r0 * cos_ta_4da,      r0 * sin_ta_4da,      -width * 0.5);
+    ix0 = VERTEX(r0 * cos_ta,          r0 * sin_ta,          -width * 0.5);
+    ix1 = VERTEX(r1 * cos_ta,          r1 * sin_ta,          -width * 0.5);
+    ix2 = VERTEX(r0 * cos_ta_2da,      r0 * sin_ta_2da,      -width * 0.5);
+    ix3 = VERTEX(r1 * cos_ta_2da,      r1 * sin_ta_2da,      -width * 0.5);
+    ix4 = VERTEX(r0 * cos_ta_4da,      r0 * sin_ta_4da,      -width * 0.5);
+    ix5 = VERTEX(r1 * cos_ta_4da,      r1 * sin_ta_4da,      -width * 0.5);
     for (j = 0; j < 6; j++) {
       NORMAL(0.0,                  0.0,                  -1.0);
     }
@@ -194,7 +171,7 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
     INDEX(ix1, ix3, ix2);
     INDEX(ix2, ix3, ix4);
     INDEX(ix3, ix5, ix4);
-               
+
     /* back sides of teeth */
     ix0 = VERTEX(r1 * cos_ta_3da,      r1 * sin_ta_3da,      -width * 0.5);
     ix1 = VERTEX(r2 * cos_ta_2da,      r2 * sin_ta_2da,      -width * 0.5);
@@ -205,7 +182,7 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
     }
     INDEX(ix0, ix1, ix2);
     INDEX(ix1, ix3, ix2);
-               
+
     /* draw outward faces of teeth */
     ix0 = VERTEX(r1 * cos_ta,          r1 * sin_ta,          width * 0.5);
     ix1 = VERTEX(r1 * cos_ta,          r1 * sin_ta,          -width * 0.5);
@@ -262,12 +239,11 @@ gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width,
 
 
 void draw_gear(gear_t* gear) {
-
   glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, gear->color);
   glVertexPointer(3, GL_FLOAT, sizeof(vertex_t), gear->vertices[0].pos);
   glNormalPointer(GL_FLOAT, sizeof(vertex_t), gear->vertices[0].norm);
   glDrawElements(GL_TRIANGLES, gear->nindices/3, GL_UNSIGNED_SHORT,
-                   gear->indices);
+                 gear->indices);
 }
 
 static GLfloat view_rotx = 20.0, view_roty = 30.0, view_rotz = 0.0;
@@ -277,38 +253,37 @@ static GLfloat angle = 0.0;
 static void
 draw(void)
 {
+  glClearColor(0.0, 0.0, 0.0, 0.0);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glPushMatrix();
 
-    glTranslatef(0.0, 0.0, -viewDist);
+  glTranslatef(0.0, 0.0, -viewDist);
 
-    glRotatef(view_rotx, 1.0, 0.0, 0.0);
-    glRotatef(view_roty, 0.0, 1.0, 0.0);
-    glRotatef(view_rotz, 0.0, 0.0, 1.0);
+  glRotatef(view_rotx, 1.0, 0.0, 0.0);
+  glRotatef(view_roty, 0.0, 1.0, 0.0);
+  glRotatef(view_rotz, 0.0, 0.0, 1.0);
 
-    glPushMatrix();
-      glTranslatef(-3.0, -2.0, 0.0);
-      glRotatef(angle, 0.0, 0.0, 1.0);
-      draw_gear(gear1);
-    glPopMatrix();
+  glPushMatrix();
+  glTranslatef(-3.0, -2.0, 0.0);
+  glRotatef(angle, 0.0, 0.0, 1.0);
+  draw_gear(gear1);
+  glPopMatrix();
 
-    glPushMatrix();
-      glTranslatef(3.1, -2.0, 0.0);
-      glRotatef(-2.0 * angle - 9.0, 0.0, 0.0, 1.0);
-      draw_gear(gear2);
-    glPopMatrix();
+  glPushMatrix();
+  glTranslatef(3.1, -2.0, 0.0);
+  glRotatef(-2.0 * angle - 9.0, 0.0, 0.0, 1.0);
+  draw_gear(gear2);
+  glPopMatrix();
 
-    glPushMatrix();
-      glTranslatef(-3.1, 4.2, 0.0);
-      glRotatef(-2.0 * angle - 25.0, 0.0, 0.0, 1.0);
-      draw_gear(gear3);
-    glPopMatrix();
+  glPushMatrix();
+  glTranslatef(-3.1, 4.2, 0.0);
+  glRotatef(-2.0 * angle - 25.0, 0.0, 0.0, 1.0);
+  draw_gear(gear3);
+  glPopMatrix();
 
   glPopMatrix();
-  glFinish();
 }
-
 
 /* new window size or exposure */
 static void
@@ -322,16 +297,16 @@ reshape(int width, int height)
   glFrustumf(-1.0, 1.0, -h, h, 5.0, 200.0);
   glMatrixMode(GL_MODELVIEW);
 }
- 
 
-static void
-init(int argc, char *argv[])
-{
+void initialize() {
+  glShadeModel(GL_SMOOTH);
+  glEnableClientState(GL_NORMAL_ARRAY);
+  glEnableClientState(GL_VERTEX_ARRAY);
+
   static GLfloat pos[4] = {5.0, 5.0, 10.0, 0.0};
   static GLfloat red[4] = {0.8, 0.1, 0.0, 1.0};
   static GLfloat green[4] = {0.0, 0.8, 0.2, 1.0};
   static GLfloat blue[4] = {0.2, 0.2, 1.0, 1.0};
-  GLint i;
 
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
   glEnable(GL_CULL_FACE);
@@ -339,77 +314,27 @@ init(int argc, char *argv[])
   glEnable(GL_LIGHT0);
   glEnable(GL_DEPTH_TEST);
 
-  glShadeModel(GL_SMOOTH);
-
-  glEnableClientState(GL_NORMAL_ARRAY);
-  glEnableClientState(GL_VERTEX_ARRAY);
-
-  for ( i=1; i<argc; i++ ) {
-    if (strcmp(argv[i], "-info")==0) {
-      printf("GL_RENDERER   = %s
-", (char *) glGetString(GL_RENDERER));
-      printf("GL_VERSION    = %s
-", (char *) glGetString(GL_VERSION));
-      printf("GL_VENDOR     = %s
-", (char *) glGetString(GL_VENDOR));
-      printf("GL_EXTENSIONS = %s
-", (char *) glGetString(GL_EXTENSIONS));
-    }
-    else if ( strcmp(argv[i], "-exit")==0) {
-      autoexit = 30;
-      printf("Auto Exit after %i seconds.
-", autoexit );
-    }
-  }
-
   /* make the gears */
   gear1 = gear(1.0, 4.0, 1.0, 20, 0.7, red);
   gear2 = gear(0.5, 2.0, 2.0, 10, 0.7, green);
   gear3 = gear(1.3, 2.0, 0.5, 10, 0.7, blue);
 }
 
-static void run_gears(GLint ttr)
-{
-  double st = current_time();
-  double ct = st;
-  double seconds = st;
-  double fps;
-  int    frames = 0;
-       
-  while ((ttr == 0) ||(ct - st < ttr))
-  {
-    double tt = current_time();
-    double dt = tt - ct;
-    ct = tt;
-    
+void RunGears() {
+  double dt = 0.01666;
+
+  initialize();
+  reshape(600, 600);
+
+  while (1) {
+    dt = 0.01666;
+
     /* advance rotation for next frame */
     angle += 70.0 * dt;  /* 70 degrees per second */
     if (angle > 3600.0)
-          angle -= 3600.0;        
-    draw(); 
-    postEGLWindow();
-    frames++;
-    dt = ct - seconds;
-    if (dt >= 5.0) 
-	{
-      fps = frames / dt;
-	  printf("%d frames in %3.1f seconds = %6.3f FPS
-", frames, dt, fps);
-	  seconds = ct;
-	  frames = 0;
-    }
-  }       
-}
+      angle -= 3600.0;
 
-int
-main(int argc, char *argv[])
-{
-    int width  = 300;
-    int height = 300;
-
-    createEGLWindow(width, height, "Gears");    
-    init(argc, argv);
-    reshape(width, height);
-    run_gears(autoexit);
-    return 0;
+    draw();
+    HandleFrame();
+  }
 }
