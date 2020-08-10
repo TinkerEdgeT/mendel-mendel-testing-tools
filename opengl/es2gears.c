@@ -35,9 +35,9 @@
  * Jul 13, 2010
  */
 
-/* 
- * Port to Mendel Linux Wayland by Peter Nordström 1 June 2020 
- * 
+/*
+ * Port to Mendel Linux Wayland by Peter Nordström 1 June 2020
+ *
  * Window handling and egl initialization done externally in
  * simple-egl.c
  */

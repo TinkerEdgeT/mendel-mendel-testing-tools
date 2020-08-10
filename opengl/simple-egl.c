@@ -128,10 +128,10 @@ void CheckFrame(int frame) {
 
   // Read the framebuffer
   glReadPixels(0, 0, glwindow->geometry.width,
-	       glwindow->geometry.height,
-	       GL_RGBA,
-	       GL_UNSIGNED_BYTE,
-	       pixeldata);
+               glwindow->geometry.height,
+               GL_RGBA,
+               GL_UNSIGNED_BYTE,
+               pixeldata);
   if (test) {
     // Compare the current frame with a saved golden image
     fp = fopen(filename, "r");
@@ -145,7 +145,7 @@ void CheckFrame(int frame) {
       }
     }
     size = fread(golden_image_data, 4,
-		 sizeof(golden_image_data)/4, fp);
+                 sizeof(golden_image_data)/4, fp);
     if (size != sizeof(golden_image_data)/4) {
       printf("FAIL : golden image has wrong size\n");
       fclose(fp);
@@ -153,9 +153,9 @@ void CheckFrame(int frame) {
     }
     for (int i = 0; i < sizeof(golden_image_data); i++) {
       if (golden_image_data[i] != pixeldata[i]) {
-	printf("FAIL : golden image mismatch frame: %d\n", frame);
-	fclose(fp);
-	exit(1);
+        printf("FAIL : golden image mismatch frame: %d\n", frame);
+        fclose(fp);
+        exit(1);
       }
     }
   } else if (generate_ref_images) {
@@ -189,7 +189,7 @@ void HandleFrame(void) {
     GLfloat seconds = t - tRate0;
     GLfloat fps = (frame - frame0) / seconds;
     printf("%d frames in %3.1f seconds = %6.3f FPS\n",
-	   (frame - frame0), seconds, fps);
+           (frame - frame0), seconds, fps);
     fflush(stdout);
     tRate0 = t;
     frame0 = frame;
@@ -256,7 +256,7 @@ static void
   assert(configs);
 
   ret = eglChooseConfig(display->egl.dpy, config_attribs,
-			configs, 1, &n);
+                        configs, 1, &n);
   assert(ret && n >= 1);
 
   display->egl.conf = configs[0];
@@ -264,13 +264,13 @@ static void
   free(configs);
   if (display->egl.conf == NULL) {
     fprintf(stderr, "did not find config with buffer size %d\n",
-	    window->buffer_size);
+            window->buffer_size);
     exit(EXIT_FAILURE);
   }
 
   display->egl.ctx = eglCreateContext(display->egl.dpy,
-				      display->egl.conf,
-				      EGL_NO_CONTEXT, context_attribs);
+                                      display->egl.conf,
+                                      EGL_NO_CONTEXT, context_attribs);
   assert(display->egl.ctx);
 
 }
@@ -293,21 +293,21 @@ static void
   window->surface = wl_compositor_create_surface(display->compositor);
 
   shell_surface = wl_shell_get_shell_surface(display->shell,
-					     window->surface);
+                                             window->surface);
   wl_shell_surface_set_toplevel(shell_surface);
 
   window->native =
       wl_egl_window_create(window->surface,
-			   window->geometry.width,
-			   window->geometry.height);
+                           window->geometry.width,
+                           window->geometry.height);
   window->egl_surface = eglCreateWindowSurface(display->egl.dpy,
-					       display->egl.conf,
-					       window->native, NULL);
+                                               display->egl.conf,
+                                               window->native, NULL);
   window->wait_for_configure = true;
   wl_surface_commit(window->surface);
 
   ret = eglMakeCurrent(window->display->egl.dpy, window->egl_surface,
-		       window->egl_surface, window->display->egl.ctx);
+                       window->egl_surface, window->display->egl.ctx);
   assert(ret == EGL_TRUE);
 
   if (!window->frame_sync)
@@ -321,10 +321,10 @@ static void
   /* Required, otherwise segfault in egl_dri2.c: dri2_make_current()
    * on eglReleaseThread(). */
   eglMakeCurrent(window->display->egl.dpy, EGL_NO_SURFACE, EGL_NO_SURFACE,
-		 EGL_NO_CONTEXT);
+                 EGL_NO_CONTEXT);
 
   eglDestroySurface(window->display->egl.dpy,
-		    window->egl_surface);
+                    window->egl_surface);
   wl_egl_window_destroy(window->native);
   wl_surface_destroy(window->surface);
 
@@ -332,24 +332,24 @@ static void
 
 static void
     registry_handle_global(void *data, struct wl_registry *registry,
-			   uint32_t name, const char *interface, uint32_t version)
+                           uint32_t name, const char *interface, uint32_t version)
 {
   struct display *d = data;
 
   if (strcmp(interface, "wl_compositor") == 0) {
     d->compositor =
-	wl_registry_bind(registry, name,
-			 &wl_compositor_interface,
-			 1);
+        wl_registry_bind(registry, name,
+                         &wl_compositor_interface,
+                         1);
   } else if (strcmp(interface, "wl_shell") == 0) {
     d->shell = wl_registry_bind(registry, name,
-				&wl_shell_interface, 1);
+                                &wl_shell_interface, 1);
   }
 }
 
 static void
     registry_handle_global_remove(void *data, struct wl_registry *registry,
-				  uint32_t name)
+                                  uint32_t name)
 {
 }
 
@@ -395,7 +395,7 @@ int
     if (strcmp("-golden", argv[1]) == 0) {
       struct stat st = {0};
       if (stat(GOLDEN_IMG_DIR, &st) == -1) {
-	mkdir(GOLDEN_IMG_DIR, 0700);
+        mkdir(GOLDEN_IMG_DIR, 0700);
       }
       generate_ref_images = true;
     } else if (strcmp("-test", argv[1]) == 0) {
@@ -414,7 +414,7 @@ int
 
   display.registry = wl_display_get_registry(display.display);
   wl_registry_add_listener(display.registry,
-			   &registry_listener, &display);
+                           &registry_listener, &display);
 
   ret = wl_display_dispatch(display.display);
   wl_display_roundtrip(display.display);
