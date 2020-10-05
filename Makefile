@@ -1,4 +1,4 @@
-SUBDIRS := opengl
+SUBDIRS := opengl opencl
 
 all: $(SUBDIRS)
 $(SUBDIRS):
